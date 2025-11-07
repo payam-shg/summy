@@ -1,0 +1,8 @@
+python-dotenv
+openai-whisper
+moviepy
+tqdm
+reportlab
+requests
+groq
+assemblyai
