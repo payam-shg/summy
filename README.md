@@ -1,4 +1,4 @@
-# Free Video Transcript, Summarization, and Translation 🎬✍️🌍
+# SUMMY Free Video Transcript, Summarization, and Translation 🎬✍️🌍
 
 This script transcribes English videos, summarizes the content, and translates both the transcript and summary into one of several languages:
 
