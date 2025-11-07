@@ -302,7 +302,7 @@ if __name__ == "__main__":
     }
 
     TRANSLATION_LANGUAGE_OPTIONS = {
-        "1": ({"code": "fa", "llm_name": "Persian", "display": "Persian (فارسی)", "emoji": "🇮🇷"}, "Persian (فارسی)"),
+        "1": ({"code": "fa", "llm_name": "Persian", "display": "Persian", "emoji": "🇮🇷"}, "Persian"),
         "2": ({"code": "it", "llm_name": "Italian", "display": "Italian", "emoji": "🇮🇹"}, "Italian"),
         "3": ({"code": "es", "llm_name": "Spanish", "display": "Spanish", "emoji": "🇪🇸"}, "Spanish"),
         "4": ({"code": "fr", "llm_name": "French", "display": "French", "emoji": "🇫🇷"}, "French"),
@@ -461,5 +461,6 @@ if __name__ == "__main__":
                     tqdm.write(f"ℹ️ No English summary to translate to {current_lang_display_name}.")
             
             time.sleep(0.2)
+
 
         print("\n✅ All video processing finished.")
