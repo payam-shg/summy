@@ -109,7 +109,7 @@ Processing videos...
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/summy.git
+git clone https://github.com/payam-shg/summy.git
 cd summy
 
 # Install dependencies
