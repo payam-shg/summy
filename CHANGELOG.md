@@ -5,15 +5,43 @@ All notable changes to SUMMY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2025-01-12
+## [2.0.0] - 2025-01-12
+
+### Added
+- **Separate Translation Service Selection** - Users can now choose different services for summarization and translation
+- **Google Translate Integration** - Free and fast translation via deep-translator library
+- **ElevenLabs Text-to-Speech** - Generate audio from summaries with 8 professional voice options
+- **Voice Selection** - Choose from 8 different voices (4 female, 4 male) for audio generation
+- **Automatic Text Chunking** - Smart handling of long texts for translation (splits at 4500 chars)
+- **Enhanced User Experience** - Improved CLI with better service descriptions and visual hierarchy
+
+### Changed
+- **Translation Architecture** - Separated translation service from summarization service
+- **Library Migration** - Replaced `googletrans` with `deep-translator` for better stability and no dependency conflicts
+- **Service Selection Flow** - Added dedicated translation service selection step
+- **Output Display** - Improved formatting to show all selected services clearly
+
+### Fixed
+- **Google Translator Initialization** - Fixed global variable issues causing initialization failures
+- **Dependency Conflicts** - Resolved httpx version conflicts by switching to deep-translator
+- **Translation Service Key** - Now properly passes translation service key instead of text service key
+
+### Documentation
+- **Comprehensive README** - Complete rewrite with professional formatting, badges, and examples
+- **Contributing Guidelines** - Added CONTRIBUTING.md with clear guidelines for contributors
+- **License** - Added MIT License file
+- **Environment Template** - Added .env.example with detailed comments
+- **Changelog** - Added this changelog to track version history
+- **.gitignore** - Added proper gitignore for Python projects
+
+## [1.0.0] - 2025-01-11
 
 ### Added
 - Initial release of SUMMY
 - Multi-service audio transcription (Whisper, Groq, AssemblyAI)
-- Intelligent summarization with multiple LLM options
-- Flexible translation engine with 4 service options
+- Intelligent summarization with multiple LLM options (Ollama, Groq, OpenRouter)
+- Basic translation support (using text processing service)
 - Support for 7 languages (Persian, Italian, Spanish, French, Portuguese, Russian, Chinese)
-- Text-to-speech generation with ElevenLabs (8 voice options)
 - PDF export for transcripts
 - Smart caching system to resume processing
 - Batch video processing
