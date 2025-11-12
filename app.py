@@ -29,6 +29,12 @@ except ImportError:
             yield item
     tqdm.write = print
 
+try:
+    from deep_translator import GoogleTranslator
+except ImportError:
+    print("Deep Translator library not found. Please install with 'pip install deep-translator'")
+    GoogleTranslator = None
+
 
 # PDF Generation Libraries
 try:
@@ -49,6 +55,7 @@ load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 
 LOCAL_WHISPER_MODEL = os.getenv("LOCAL_WHISPER_MODEL", "turbo")
 GROQ_TRANSCRIPTION_MODEL = os.getenv("GROQ_TRANSCRIPTION_MODEL", "whisper-large-v3-turbo")
@@ -66,6 +73,7 @@ INPUT_FOLDER = "./input_videos"
 AUDIO_FOLDER = "./audio_files"
 TEXT_FOLDER = "./transcripts"
 SUMMARY_FOLDER = "./summaries"
+SUMMARY_AUDIO_FOLDER = "./summary_audio_files"
 
 # ========== Font Settings for PDF ========== #
 PDF_FONT_NAME = os.getenv("PDF_FONT_NAME", "Tahoma")
@@ -75,6 +83,7 @@ os.makedirs(INPUT_FOLDER, exist_ok=True)
 os.makedirs(AUDIO_FOLDER, exist_ok=True)
 os.makedirs(TEXT_FOLDER, exist_ok=True)
 os.makedirs(SUMMARY_FOLDER, exist_ok=True)
+os.makedirs(SUMMARY_AUDIO_FOLDER, exist_ok=True)
 
 if TTFont:
     try:
@@ -94,6 +103,47 @@ class TranscriptionResult:
 
 groq_client = None
 assemblyai_transcriber = None
+elevenlabs_client = None
+google_translator = None
+
+def initialize_google_translator():
+    global google_translator
+    if GoogleTranslator:
+        try:
+            # Test initialization with a simple translation
+            test = GoogleTranslator(source='en', target='es')
+            google_translator = True  # Just a flag to indicate it's available
+            print("Google Translator initialized.")
+            return True
+        except Exception as e:
+            print(f"Failed to initialize Google Translator: {e}")
+            google_translator = None
+            return False
+    else:
+        print("Deep Translator library not available. Please install with 'pip install deep-translator'")
+        google_translator = None
+        return False
+
+def initialize_elevenlabs_client():
+    global elevenlabs_client
+    if ELEVENLABS_API_KEY and ELEVENLABS_API_KEY != "your_elevenlabs_api_key_here":
+        try:
+            from elevenlabs import ElevenLabs
+            elevenlabs_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+            print("ElevenLabs client initialized.")
+            return True
+        except ImportError:
+            print("ElevenLabs library not found. Please install with 'pip install elevenlabs'")
+            elevenlabs_client = None
+            return False
+        except Exception as e:
+            print(f"Failed to initialize ElevenLabs client: {e}")
+            elevenlabs_client = None
+            return False
+    else:
+        print("ELEVENLABS_API_KEY not found or not set in .env. ElevenLabs services will be unavailable.")
+        elevenlabs_client = None
+        return False
 
 def initialize_selected_clients(audio_service_key, text_service_key):
     global groq_client, assemblyai_transcriber
@@ -274,15 +324,88 @@ def summarize_text_dispatcher(text, key):
     elif key == "openrouter": return process_text_openrouter(p, "Summarization")
     tqdm.write(f"Unknown text service key for summarization: {key}. Defaulting to Ollama."); return process_text_ollama_local(p, "Summarization")
 
-# MODIFIED: Generalized translation function
-def translate_text_dispatcher(text, target_language_llm_name, service_key):
-    p = f"Translate the following English text to {target_language_llm_name}. Provide only the {target_language_llm_name} translation without any introductory phrases, explanations, or quotation marks around the translation:\n\n{text}"
+# MODIFIED: Generalized translation function with Google Translate support
+def translate_text_google(text, target_language_code):
+    """Translate text using Google Translate via deep-translator"""
+    global google_translator
+    if not google_translator or not GoogleTranslator:
+        tqdm.write("❌ Google Translator not initialized.")
+        return None
+    
+    try:
+        tqdm.write(f"Translating with Google Translate to language code: {target_language_code}...")
+        translator = GoogleTranslator(source='en', target=target_language_code)
+        
+        # Split text into chunks if it's too long (Google Translate has a 5000 char limit)
+        max_length = 4500
+        if len(text) <= max_length:
+            return translator.translate(text)
+        else:
+            # Split by paragraphs and translate in chunks
+            chunks = []
+            current_chunk = ""
+            for paragraph in text.split('\n'):
+                if len(current_chunk) + len(paragraph) + 1 <= max_length:
+                    current_chunk += paragraph + '\n'
+                else:
+                    if current_chunk:
+                        chunks.append(current_chunk)
+                    current_chunk = paragraph + '\n'
+            if current_chunk:
+                chunks.append(current_chunk)
+            
+            translated_chunks = [translator.translate(chunk) for chunk in chunks]
+            return '\n'.join(translated_chunks)
+    except Exception as e:
+        tqdm.write(f"❌ Error during Google Translate: {e}")
+        return None
+
+def translate_text_dispatcher(text, target_language_llm_name, target_language_code, service_key):
     task_name = f"{target_language_llm_name} Translation"
     tqdm.write(f"Attempting {task_name} using service key: {service_key}")
-    if service_key == "ollama_local": return process_text_ollama_local(p, task_name)
-    elif service_key == "groq": return process_text_groq(p, task_name)
-    elif service_key == "openrouter": return process_text_openrouter(p, task_name)
-    tqdm.write(f"Unknown text service key for translation: {service_key}. Defaulting to Ollama."); return process_text_ollama_local(p, task_name)
+    
+    if service_key == "google_translate":
+        return translate_text_google(text, target_language_code)
+    else:
+        # Use LLM-based translation
+        p = f"Translate the following English text to {target_language_llm_name}. Provide only the {target_language_llm_name} translation without any introductory phrases, explanations, or quotation marks around the translation:\n\n{text}"
+        if service_key == "ollama_local": return process_text_ollama_local(p, task_name)
+        elif service_key == "groq": return process_text_groq(p, task_name)
+        elif service_key == "openrouter": return process_text_openrouter(p, task_name)
+        tqdm.write(f"Unknown text service key for translation: {service_key}. Defaulting to Ollama."); return process_text_ollama_local(p, task_name)
+
+# --- ElevenLabs Audio Generation --- #
+def generate_audio_elevenlabs(text_content, output_audio_path, voice_id="21m00Tcm4TlvDq8ikWAM"):
+    """
+    Generate audio from text using ElevenLabs API
+    Default voice: Rachel (21m00Tcm4TlvDq8ikWAM)
+    """
+    global elevenlabs_client
+    if not elevenlabs_client:
+        tqdm.write("❌ ElevenLabs client not initialized. Cannot generate audio.")
+        return False
+    
+    try:
+        tqdm.write(f"🎙️ Generating audio with ElevenLabs (Voice ID: {voice_id})...")
+        
+        # Generate audio using ElevenLabs
+        audio_generator = elevenlabs_client.text_to_speech.convert(
+            voice_id=voice_id,
+            text=text_content,
+            model_id="eleven_multilingual_v2"
+        )
+        
+        # Save the audio file
+        with open(output_audio_path, "wb") as audio_file:
+            for chunk in audio_generator:
+                audio_file.write(chunk)
+        
+        tqdm.write(f"🎵 Audio successfully generated: {output_audio_path}")
+        return True
+        
+    except Exception as e:
+        tqdm.write(f"❌ Error generating audio with ElevenLabs: {str(e)}")
+        return False
 
 # ========== Main Execution ========== #
 if __name__ == "__main__":
@@ -311,16 +434,51 @@ if __name__ == "__main__":
         "7": ({"code": "zh", "llm_name": "Chinese", "display": "Chinese", "emoji": "🇨🇳"}, "Chinese"),
     }
 
+    ELEVENLABS_VOICE_OPTIONS = {
+        "1": ("21m00Tcm4TlvDq8ikWAM", "Rachel - Calm, Natural Female Voice"),
+        "2": ("EXAVITQu4vr4xnSDxMaL", "Bella - Soft, Friendly Female Voice"),
+        "3": ("AZnzlk1XvdvUeBnXmlld", "Domi - Strong, Confident Female Voice"),
+        "4": ("ErXwobaYiN019PkySvjV", "Antoni - Well-Rounded Male Voice"),
+        "5": ("VR6AewLTigWG4xSOukaG", "Arnold - Crisp, Professional Male Voice"),
+        "6": ("pNInz6obpgDQGcFmaJgB", "Adam - Deep, Authoritative Male Voice"),
+        "7": ("yoZ06aMxZJJ28mfd3POQ", "Sam - Dynamic, Energetic Male Voice"),
+        "8": ("IKne3meq5aSn9XLyUdCD", "Charlie - Casual, Conversational Male Voice"),
+    }
+
+    TRANSLATION_SERVICE_OPTIONS = {
+        "1": ("google_translate", "Google Translate (Free, Fast)"),
+        "2": ("ollama_local", "Local Ollama"),
+        "3": ("groq", "Groq API (requires GROQ_API_KEY)"),
+        "4": ("openrouter", "OpenRouter API (requires OPENROUTER_API_KEY)")
+    }
+
     print("Welcome to the Video Processing Script!")
     chosen_audio_service_key = get_user_choice("Please select the Audio-to-Text service:", AUDIO_SERVICE_OPTIONS)
-    chosen_text_service_key = get_user_choice("Please select the Text Processing service (for summarization & translation):", TEXT_SERVICE_OPTIONS)
+    chosen_text_service_key = get_user_choice("Please select the Text Processing service (for summarization):", TEXT_SERVICE_OPTIONS)
 
+    perform_audio_generation = get_yes_no_choice("Do you want to generate audio from summaries using ElevenLabs?")
+    
+    chosen_voice_id = None
+    if perform_audio_generation:
+        if not initialize_elevenlabs_client():
+            print("⚠️ ElevenLabs initialization failed. Audio generation will be skipped.")
+            perform_audio_generation = False
+        else:
+            chosen_voice_id = get_user_choice("Please select the ElevenLabs voice for audio generation:", ELEVENLABS_VOICE_OPTIONS)
 
     perform_translation = get_yes_no_choice("Do you want to translate the transcript and summary?")
     
     chosen_translation_lang_details = None
+    chosen_translation_service_key = None
     if perform_translation:
         chosen_translation_lang_details = get_user_choice("Please select the target language for translation:", TRANSLATION_LANGUAGE_OPTIONS)
+        chosen_translation_service_key = get_user_choice("Please select the Translation service:", TRANSLATION_SERVICE_OPTIONS)
+        
+        # Initialize Google Translator if selected
+        if chosen_translation_service_key == "google_translate":
+            if not initialize_google_translator():
+                print("⚠️ Google Translator initialization failed. Please select another translation service.")
+                chosen_translation_service_key = get_user_choice("Please select an alternative Translation service:", TRANSLATION_SERVICE_OPTIONS)
 
     initialize_selected_clients(chosen_audio_service_key, chosen_text_service_key)
     video_files = get_video_files()
@@ -332,9 +490,17 @@ if __name__ == "__main__":
         
         print(f"\n🔍 Found {len(video_files)} videos for processing.")
         print(f"🔊 Audio-to-Text Service Selected: {audio_service_desc}")
-        print(f"✍️ Text Processing Service Selected: {text_service_desc}")
-        if perform_translation and chosen_translation_lang_details:
-            print(f"🌍 Target Translation Language: {chosen_translation_lang_details['display']}")
+        print(f"✍️ Text Processing Service (Summarization): {text_service_desc}")
+        if perform_audio_generation and chosen_voice_id:
+            voice_desc = next((desc for vid, desc in ELEVENLABS_VOICE_OPTIONS.values() if vid == chosen_voice_id), "Unknown Voice")
+            print(f"�️ Audio Generation: Enabled (Voice: {voice_desc})")
+        else:
+            print(f"🎙️ Audio Generation: Skipped")
+        if perform_translation and chosen_translation_lang_details and chosen_translation_service_key:
+            translation_service_desc = next((desc for val, desc in TRANSLATION_SERVICE_OPTIONS.values() if val == chosen_translation_service_key), chosen_translation_service_key)
+            print(f"🌍 Translation: Enabled")
+            print(f"   └─ Target Language: {chosen_translation_lang_details['display']}")
+            print(f"   └─ Translation Service: {translation_service_desc}")
         else:
             print("🌍 Translation: Skipped")
         print("")
@@ -423,7 +589,7 @@ if __name__ == "__main__":
                 if os.path.exists(text_path_txt_translated): 
                     tqdm.write(f"{current_lang_emoji} Translated ({current_lang_display_name}) TXT '{text_path_txt_translated}' exists. Skipping.")
                 else:
-                    translated_transcript = translate_text_dispatcher(english_transcript_content, current_lang_llm_name, chosen_text_service_key)
+                    translated_transcript = translate_text_dispatcher(english_transcript_content, current_lang_llm_name, current_lang_code, chosen_translation_service_key)
                     if translated_transcript:
                         with open(text_path_txt_translated, "w", encoding="utf-8") as f: f.write(translated_transcript)
                         tqdm.write(f"{current_lang_emoji} Saved Translated ({current_lang_display_name}) TXT: {text_path_txt_translated}")
@@ -449,7 +615,7 @@ if __name__ == "__main__":
                     if os.path.exists(summary_path_translated): 
                         tqdm.write(f"{current_lang_emoji} Translated ({current_lang_display_name}) summary '{summary_path_translated}' exists. Skipping.")
                     else:
-                        translated_summary = translate_text_dispatcher(english_summary, current_lang_llm_name, chosen_text_service_key)
+                        translated_summary = translate_text_dispatcher(english_summary, current_lang_llm_name, current_lang_code, chosen_translation_service_key)
                         if translated_summary:
                             with open(summary_path_translated, "w", encoding="utf-8") as f: f.write(translated_summary)
                             tqdm.write(f"{current_lang_emoji} Saved Translated ({current_lang_display_name}) summary: {summary_path_translated}")
@@ -459,6 +625,31 @@ if __name__ == "__main__":
                     tqdm.write(f"ℹ️ English summary file '{summary_path_en}' exists but content not processed for translated summary.")
                 else: 
                     tqdm.write(f"ℹ️ No English summary to translate to {current_lang_display_name}.")
+            
+            # Generate audio from summaries using ElevenLabs
+            if perform_audio_generation and elevenlabs_client and chosen_voice_id:
+                # Generate audio for English summary
+                if english_summary:
+                    audio_path_en = os.path.join(SUMMARY_AUDIO_FOLDER, f"{base_name}_summary_en.mp3")
+                    if os.path.exists(audio_path_en):
+                        tqdm.write(f"🎵 English summary audio '{audio_path_en}' already exists. Skipping.")
+                    else:
+                        generate_audio_elevenlabs(english_summary, audio_path_en, chosen_voice_id)
+                
+                # Generate audio for translated summary if available
+                if perform_translation and summary_path_translated and current_lang_code:
+                    if os.path.exists(summary_path_translated):
+                        try:
+                            with open(summary_path_translated, "r", encoding="utf-8") as f:
+                                translated_summary_content = f.read()
+                            
+                            audio_path_translated = os.path.join(SUMMARY_AUDIO_FOLDER, f"{base_name}_summary_{current_lang_code}.mp3")
+                            if os.path.exists(audio_path_translated):
+                                tqdm.write(f"{current_lang_emoji} Translated ({current_lang_display_name}) summary audio '{audio_path_translated}' already exists. Skipping.")
+                            else:
+                                generate_audio_elevenlabs(translated_summary_content, audio_path_translated, chosen_voice_id)
+                        except Exception as e:
+                            tqdm.write(f"❌ Error reading translated summary for audio generation: {e}")
             
             time.sleep(0.2)
 

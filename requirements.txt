@@ -6,3 +6,5 @@ reportlab
 requests
 groq
 assemblyai
+elevenlabs
+deep-translator
