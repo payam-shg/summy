@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Changelog** - Added this changelog to track version history
 - **.gitignore** - Added proper gitignore for Python projects
 
-## [1.0.0] - 2025-01-11
+## [1.0.0] - 2025-05-27
 
 ### Added
 - Initial release of SUMMY
