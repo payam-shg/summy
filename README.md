@@ -132,7 +132,7 @@ LOCAL_WHISPER_MODEL=turbo
 GROQ_TRANSCRIPTION_MODEL=whisper-large-v3-turbo
 GROQ_CHAT_MODEL=moonshotai/kimi-k2-instruct-0905
 OLLAMA_MODEL=llama3.1:8b
-OPENROUTER_CHAT_MODEL=x-ai/grok-4-fast:free
+OPENROUTER_CHAT_MODEL=tngtech/deepseek-r1t2-chimera:free
 
 # PDF Font Settings (for non-Latin scripts)
 PDF_FONT_NAME=Tahoma
